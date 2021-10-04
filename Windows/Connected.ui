@@ -52,7 +52,7 @@
      </rect>
     </property>
    </widget>
-   <widget class="QLabel" name="label_2">
+   <widget class="QLabel" name="Chatroom_label2">
     <property name="geometry">
      <rect>
       <x>110</x>
