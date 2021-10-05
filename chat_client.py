@@ -1,14 +1,15 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLineEdit, QLabel, QPushButton, QListWidget, QStackedWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLineEdit, QLabel, QPushButton, QListWidget, QStackedWidget, QTextBrowser
 from PyQt5 import uic
-import sys, socket, threading
+import sys, socket, threading, datetime
 
-
+ownNickname = ''
 host = 'localhost'
 data_payload = 2048
 connectedClientsList = [] # List contaning the nickname of all clients that are connected to the server
 chatroomList = {} # key is group name, value is list of group members. First group member in list is the group's creator
 groupMessages = {} # key is group name, value is string containing all messages separated by new line
 oneToOneMessages = {} # key is client name, value is string containing all messages separated by new line
+currentOneToOneClientPartner = ''
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Consider saving time separately for messages so different layout can be used. Long string is very rigid.
@@ -96,6 +97,7 @@ class ConnectionUI(QWidget):
 
     # Specify functions of buttons
     def connect(self):
+        ownNickname=self.nickname_textfield.text()
         connection_thread = threading.Thread(target=establish_connection, args=(int(self.port_textfield.text()), self.nickname_textfield.text()))
         connection_thread.setDaemon(True)
         connection_thread.start()
@@ -159,6 +161,43 @@ class ConnectedUI(QMainWindow):
             self.chatroom_list.addItem((group + " by " + chatroomList[group][0]))
         self.chatroom_list.repaint()
 
+class OneToOneUI(QMainWindow):
+
+    def __init__(self):
+        super(ConnectedUI, self).__init__()
+
+        # Load the Connection.ui file
+        uic.loadUi("./Windows/OneToOne.ui", self)
+
+        #Define the widgets
+        self.onetoone_chatwith_label = self.findChild(QLabel, "onetoone_chatwith_label")
+        self.onetoone_textbrowser = self.findChild(QTextBrowser, "onetoone_textbrowser")
+        self.onetoone_textfield = self.findChild(QLineEdit, "onetoone_textfield")
+        self.onetoone_send_button = self.findChild(QPushButton, "onetoone_send_button")
+        self.onetoone_close_button = self.findChild(QPushButton, "onetoone_close_button")
+
+
+        # Attach functions to buttons when clicked
+        self.onetoone_close_button.clicked.connect(self.close_button)
+        self.onetoone_send_button.clicked.connect(self.create_room)
+
+    def initialise(self):
+        self.onetoone_chatwith_label = 'Chat with ' + currentOneToOneClientPartner
+        self.onetoone_textbrowser.setText(oneToOneMessages[currentOneToOneClientPartner])
+
+    #Specify function of buttons
+    def close_button(self):
+        widget.removeWidget(onetooneUI)
+        widget.insertWidget(0, connectionUI)
+
+    def send_button(self):
+        current_time = datetime.datetime.now().strftime('%H:%M')
+        data_to_send = [ownNickname, currentOneToOneClientPartner, self.onetoone_textfield.text(), current_time]
+        send_message(data_to_send)
+        oneToOneMessages[currentOneToOneClientPartner] = oneToOneMessages[currentOneToOneClientPartner] + ownNickname + " ("  + current_time + "): " + self.onetoone_textfield.text() + "\n"
+        self.onetoone_textfield.setText('')
+            
+
 
 # Initialise the app and the various scenes. Uses a stacked widget to enable switching between scenes by replacing the current widget with the new widget when 
 # necessary. 
@@ -167,6 +206,7 @@ if __name__ == '__main__':
     widget = QStackedWidget()
     connectionUI = ConnectionUI()
     connectedUI = ConnectedUI()
+    onetooneUI = OneToOneUI()
     widget.addWidget(connectionUI)
     widget.setFixedHeight(610)
     widget.setFixedWidth(805)
