@@ -60,16 +60,6 @@
      <string>Members</string>
     </property>
    </widget>
-   <widget class="QTextBrowser" name="groupchat_members_textbrowser">
-    <property name="geometry">
-     <rect>
-      <x>600</x>
-      <y>70</y>
-      <width>181</width>
-      <height>421</height>
-     </rect>
-    </property>
-   </widget>
    <widget class="QLineEdit" name="groupchat_textfield">
     <property name="geometry">
      <rect>
@@ -126,6 +116,16 @@
     </property>
     <property name="text">
      <string>Invite</string>
+    </property>
+   </widget>
+   <widget class="QListWidget" name="groupchat_members_list">
+    <property name="geometry">
+     <rect>
+      <x>600</x>
+      <y>70</y>
+      <width>191</width>
+      <height>411</height>
+     </rect>
     </property>
    </widget>
   </widget>

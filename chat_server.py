@@ -5,6 +5,9 @@ data_payload = 2048
 backlog = 1
 clientDict = {} # key is client nickname, value is socket reference of the client
 roomDict = {} # key is room name, value is array of client nicknames
+rot13 = str.maketrans(
+    'ABCDEFGHIJKLMabcdefghijklmNOPQRSTUVWXYZnopqrstuvwxyz',
+    'NOPQRSTUVWXYZnopqrstuvwxyzABCDEFGHIJKLMabcdefghijklm')
 
 
 # TODO: sort out client dictionary that maps client nickname to client object
