@@ -30,21 +30,25 @@ def chat_server(port):
     sock.listen(backlog)
 
     print("Waiting for a client")
-    newclient_thread = threading.Thread(target=new_clients, args=(sock, clientDict))
-    newclient_thread.setDaemon(True)
-    newclient_thread.start()
-    send_data(sock, clientDict)
-
-
-def new_clients(sock, clientset):
     while True:
+        print("accepting clients")
         client, address = sock.accept()
-        uname = client.recv(data_payload).decode()
-        if uname:
-            clientDict[uname] = client
-            recv_thread = threading.Thread(target=notify_all, args=(uname, None, "NewClient", None))
-            recv_thread.setDaemon(True)
-            recv_thread.start()
+        newclient_thread = threading.Thread(target=new_clients, args=(sock, client))
+        newclient_thread.setDaemon(True)
+        newclient_thread.start()
+
+
+def new_clients(sock, client):
+    uname = client.recv(data_payload).decode()
+    if uname:
+        print(uname + " joined. Current clients are " + clientDict.keys())
+        clientDict[uname] = client
+        notify_thread = threading.Thread(target=notify_all, args=(uname, None, "NewClient", None))
+        notify_thread.setDaemon(True)
+        notify_thread.start()
+        recv_thread = threading.Thread(target=receive_data, args=(sock, client, uname))
+        recv_thread.setDaemon(True)
+        recv_thread.start()
 
 
 def receive_data(sock, client, uname):
@@ -53,40 +57,24 @@ def receive_data(sock, client, uname):
         if data:
             messageList = data.decode().split('|||')
             if messageList:
+                print(messageList)
                 message_thread = threading.Thread(target=message_actions, args=(uname, messageList))
                 message_thread.setDaemon(True)
                 message_thread.start() 
-
-            
-            
-            # sending_thread = threading.Thread(target=receive_data, args=)
-
-
-            for c in clientDict: 
-                if c != client:
-                    c.sendall((f"{uname}> {data.decode()}").encode('utf-8'))
-
-
-def send_data(sock, clientset):
-    while True:
-        message = input("Server > ")
-        message = f"Server> {message}"
-        for c in clientset:
-            c.sendall(message.encode('utf-8'))
-             
+          
 
 def message_actions(uname, messageList):
     if messageList[0] == "GroupInvite":
         if messageList[2] in clientDict and messageList[1] in roomDict:
-            roomDict[messageList[1]] = roomDict[messageList[1]].append(messageList[2])
+            roomDict[messageList[1]].append(messageList[2])
             notify_thread = threading.Thread(target=notify_all, args=(uname, messageList[1], "GroupInvite", messageList[2]))    
             notify_thread.setDaemon(True)
             notify_thread.start()
     elif messageList[0] == "GroupJoin":
+        roomDict[messageList[1]].append(uname)
         notify_thread = threading.Thread(target=notify_all, args=(uname, messageList[1], "GroupJoin", messageList[2]))    
         notify_thread.setDaemon(True)
-        notify_thread.start()
-        roomDict[messageList[1]].append(uname)
+        notify_thread.start()   
     elif messageList[0] == "OneToOneMessage":
         notify_thread = threading.Thread(target=notify_all, args=(uname, messageList[1], "OneToOneMessage", messageList[2]))    
         notify_thread.setDaemon(True)
@@ -96,6 +84,8 @@ def message_actions(uname, messageList):
         notify_thread.setDaemon(True)
         notify_thread.start()
     elif messageList[0] == "Disconnect":
+        clientDict[uname].shutdown()
+        clientDict[uname].close()
         clientDict.pop(uname, None)
         notify_thread = threading.Thread(target=notify_all, args=(uname, messageList[1], "Disconnect", messageList[2]))    
         notify_thread.setDaemon(True)
@@ -124,39 +114,43 @@ def notify_all(uname, recipient, messageType, message):
         data = ["AddGroupMember", recipient, message, " ", datetime.datetime.now().strftime('%H:%M')]
         for member in roomDict[recipient]:
             if member != uname and member != message:
-                clientDict[member].sendAll(data.encode('utf-8'))
+                clientDict[member].sendall(data_to_serial(data).encode('utf-8'))
             elif member == message:
                 data = ["InviteToGroup", recipient, message, " ", datetime.datetime.now().strftime('%H:%M')]
-                clientDict[member].sendAll(data.encode('utf-8'))
+                clientDict[member].sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "GroupJoin":
         data = ["AddGroupMember", recipient, uname, " ", datetime.datetime.now().strftime('%H:%M')]
         for member in roomDict[recipient]:
             if member != uname:
-                clientDict[member].sendAll(data.encode('utf-8'))
+                clientDict[member].sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "OneToOneMessage" and recipient in clientDict:
         data = ["OnetoOne", " ", uname, message, datetime.datetime.now().strftime('%H:%M')]
-        clientDict[recipient].sendall(data.encode('utf-8'))
+        clientDict[recipient].sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "GroupMessage" and recipient in roomDict:
         data = ["Group", recipient, uname, message, datetime.datetime.now().strftime('%H:%M')]
         for member in roomDict[recipient]:
             if member != uname:
-                clientDict[member].sendAll(data.encode('utf-8'))
+                clientDict[member].sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "Disconnect":
         data = ["Disconnect", " ", uname, message, datetime.datetime.now().strftime('%H:%M')]
         for client in clientDict.values():
-            client.sendAll(data.encode('utf-8'))
+            client.sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "NewGroup":
         data = ["NewGroup", recipient, uname, message, datetime.datetime.now().strftime('%H:%M')]
         for client in clientDict.values():
             if client != uname:
-                client.sendAll(data.encode('utf-8'))
+                client.sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "NewClient":
         data = ["NewClient", " ", uname, " ", datetime.datetime.now().strftime('%H:%M')]
         for client in clientDict.values():
             if client != uname:
-                client.sendAll(data.encode('utf-8'))
+                client.sendall(data_to_serial(data).encode('utf-8'))
 
-
+def data_to_serial(data):
+    serial = ''
+    for string in data:
+        serial = serial + string + '|||'
+    return serial
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Socket Server Example')

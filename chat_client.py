@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLineEdit, QLabel, QPushButton, QListWidget, QStackedWidget, QTextBrowser
 from PyQt5 import uic
-import sys, socket, threading, datetime
+import sys, socket, threading, datetime, re
 
 rot13 = str.maketrans(
     'ABCDEFGHIJKLMabcdefghijklmNOPQRSTUVWXYZnopqrstuvwxyz',
@@ -82,6 +82,9 @@ def receive_data(sock, connection_ui, connected_ui):
         sock.close()
 
 
+
+
+
 class ConnectionUI(QWidget):
     def __init__(self):
         super(ConnectionUI, self).__init__()
@@ -135,9 +138,6 @@ class ConnectedUI(QMainWindow):
         self.joinroom_button = self.findChild(QPushButton, "joinroom_button")
         self.closeconnected_button = self.findChild(QPushButton, "closeconnected_button")
 
-        self.connectedclient_list.addItem("Andrew")
-        self.connectedclient_list.addItem("Kenari")
-
         # Attach functions to buttons when clicked
         self.closeconnected_button.clicked.connect(self.close_connected)
         self.createroom_button.clicked.connect(self.create_room)
@@ -147,6 +147,9 @@ class ConnectedUI(QMainWindow):
 
     #Specify function of buttons
     def close_connected(self):
+        data_to_send = ["Disconnect", " ", " ", datetime.datetime.now().strftime('%H:%M')]
+        sock.shutdown()
+        sock.close()
         widget.removeWidget(connectedUI)
         widget.insertWidget(0, connectionUI)
 
@@ -166,6 +169,10 @@ class ConnectedUI(QMainWindow):
     def join_room(self):
         if self.chatroom_list.currentRow() != -1:
             currentGroup = self.chatroom_list.currentItem().text()
+            if currentGroup not in groupMessages:
+                data_to_send = ["GroupJoin", currentGroup, " ", datetime.datetime.now().strftime('%H:%M')]
+                send_message(data_to_send)
+                groupMessages[currentGroup] = ''
             widget.removeWidget(connectedUI)
             widget.insertWidget(0, groupChatUI)
 
@@ -203,16 +210,17 @@ class OneToOneUI(QMainWindow):
         self.onetoone_send_button.clicked.connect(self.send_button)
 
     def initialise(self):
-        self.onetoone_chatwith_label = 'Chat with ' + currentOneToOneClientPartner
+        print(currentOneToOneClientPartner)
+        self.onetoone_chatwith_label.setText('Chat with ' + currentOneToOneClientPartner)
         self.onetoone_textbrowser.setText(oneToOneMessages[currentOneToOneClientPartner])
 
     #Specify function of buttons
     def close_button(self):
         widget.removeWidget(onetooneUI)
-        widget.insertWidget(0, connectionUI)
+        widget.insertWidget(0, connectedUI)
 
     def send_button(self):
-        if self.onetoone_textfield.text().isBlank() == False:
+        if self.onetoone_textfield.text() != "" or re.search("^\s*$", self.onetoone_textfield.text()):
             current_time = datetime.datetime.now().strftime('%H:%M')
             data_to_send = ["OneToOneMessage", currentOneToOneClientPartner, self.onetoone_textfield.text(), current_time]
             send_message(data_to_send)
@@ -266,7 +274,7 @@ class GroupChatUI(QMainWindow):
 
     def invite_button(self):
         widget.removeWidget(groupChatUI)
-        # widget.insertWidget(0, inviteUI)
+        widget.insertWidget(0, inviteUI)
 
 class InviteUI(QMainWindow):
 
