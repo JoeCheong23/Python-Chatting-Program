@@ -76,7 +76,7 @@ def receive_data(sock, client, uname):
             print(f"Socket error: {str(e)}")
             client.close()
             message = ["Disconnect", " ", " ", " "] 
-            disconnect_thread = threading.Thread(target=message_actions, args=(uname, messageList))
+            disconnect_thread = threading.Thread(target=message_actions, args=(uname, message))
             disconnect_thread.setDaemon(True)
             disconnect_thread.start()
             break
@@ -116,7 +116,7 @@ def message_actions(uname, messageList):
         notify_thread.setDaemon(True)
         notify_thread.start()
         for key in roomDict.keys():
-            if roomDict[key].contains(uname):
+            if uname in roomDict[key]:
                 roomDict[key].remove(uname)
     elif messageList[0] == "NewGroup":
         roomDict[messageList[1]] = [uname]
@@ -164,7 +164,7 @@ def notify_all(uname, recipient, messageType, message):
     elif messageType == "Disconnect":
         data = ["Disconnect", " ", uname, message, datetime.datetime.now().strftime('%H:%M')]
         for client in clientDict.values():
-            print("Sending to "+ client + " " + ','.join([str(element) for element in data]))
+            print("Sending " ','.join([str(element) for element in data]))
             client.sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "NewGroup":
         data = ["NewGroup", recipient, uname, message, datetime.datetime.now().strftime('%H:%M')]

@@ -55,10 +55,12 @@ def receive_message(message):
     messageList = message.decode('utf-8').split('|||')
     print("Message is " + ','.join([str(element) for element in messageList]))
 
-    if messageList[0] == "NewGroup" or messageList[0] == "InviteToGroup":
+    if messageList[0] == "NewGroup" :
         chatroomDict[messageList[1]] = messageList[2].split(',')
         groupMessages[messageList[1]] = ""
         repaint_UI("NewGroup", "")
+    elif messageList[0] == "InviteToGroup":
+        chatroomDict[messageList[1]].append(ownNickname)
     elif messageList[0] == "ClientSetup":
         global connectedClientsList
         connectedClientsList = messageList[3].split(";")
@@ -69,10 +71,13 @@ def receive_message(message):
         repaint_UI("NewClient", "")
     elif messageList[0] == "GroupSetup":
         groupSplit = messageList[3].split(";")
-        for x in groupSplit:
+        for x in groupSplit[:-1]:
             roomName = x.split("=")[0]
+            print(roomName)
             roomMembers = x.split("=")[1].split(",")
+            print(roomMembers)
             chatroomDict[roomName] = roomMembers
+            groupMessages[roomName] = ''
         repaint_UI("NewGroup", "")
     elif messageList[0] == "NewClient":
         connectedClientsList.append(messageList[2])
@@ -82,23 +87,27 @@ def receive_message(message):
         repaint_UI("NewClient", "")
     elif messageList[0] == "Group":
         groupMessages[messageList[1]] = groupMessages[messageList[1]] + messageList[2] + " ("  + messageList[4] + "): " + messageList[3] + "\n"
-        repaint_UI("Group", messageList[1])
+        repaint_UI("GroupMessage", messageList[1])
     elif messageList[0] == "OnetoOne":
         oneToOneMessages[messageList[2]] = oneToOneMessages[messageList[2]] + messageList[2] + " ("  + messageList[4] + "): " + messageList[3] + "\n"
         repaint_UI("OnetoOne", messageList[2])
     elif messageList[0] == "AddGroupMember":
-        chatroomDict[messageList[1]] = chatroomDict[messageList[1]].append(messageList[2])
+        chatroomDict[messageList[1]].append(messageList[2])
         groupMessages[messageList[1]] = groupMessages[messageList[1]] + "Server ("  + messageList[4] + "): " + messageList[2] + " has connected!\n"
         repaint_UI("AddGroupMember", messageList[1])
     elif messageList[0] == "Disconnect":
         disconnectedMember = messageList[2]
         connectedClientsList.remove(disconnectedMember)
         for roomKey in chatroomDict.keys():
-            if chatroomDict[roomKey].contains(disconnectedMember):
+            if disconnectedMember in chatroomDict[roomKey]:
                 chatroomDict[roomKey].remove(disconnectedMember)
                 groupMessages[roomKey] = groupMessages[roomKey] + "Server ("  + messageList[4] + "): " + messageList[2] + " has disconnected!\n"
         oneToOneMessages[disconnectedMember] = oneToOneMessages[disconnectedMember] + "Server ("  + messageList[4] + "): " + messageList[2] + " has disconnected!\n"
         repaint_UI("NewClient", "")
+        if currentOneToOneClientPartner == disconnectedMember:
+            repaint_UI("OnetoOne", disconnectedMember)
+        if currentGroup != '':
+            repaint_UI("AddGroupMember", currentGroup)
     
     
 
@@ -125,12 +134,11 @@ def repaint_UI(repaint_option, chat_target):
         connectedUI.connected_refresh_group_button.click()
     elif repaint_option == "GroupMessage":
         if (chat_target == currentGroup):
-            groupChatUI.groupchat_textbrowser.setText(groupMessages[currentGroup])
+            groupChatUI.groupchat_refresh_message.click()
     elif repaint_option == "AddGroupMember":
         if (chat_target == currentGroup):
-            groupChatUI.groupchat_members_list.clear()
-            groupChatUI.groupchat_members_list.addItems(chatroomDict[currentGroup])
-            groupChatUI.groupchat_members_list.repaint()
+            groupChatUI.groupchat_refresh_members.click()
+            groupChatUI.groupchat_refresh_message.click()
     elif repaint_option == "OnetoOne":
         if (chat_target == currentOneToOneClientPartner):
             onetooneUI.onetoone_refresh_button.click()
@@ -202,6 +210,7 @@ class ConnectedUI(QMainWindow):
         self.closeconnected_button.clicked.connect(self.close_connected)
         self.createroom_button.clicked.connect(self.create_room)
         self.onetoone_button.clicked.connect(self.onetoone)
+        self.joinroom_button.clicked.connect(self.join_room)
         self.connected_refresh_button.clicked.connect(self.new_client)
         self.connected_refresh_group_button.clicked.connect(self.new_group)
 
@@ -216,11 +225,17 @@ class ConnectedUI(QMainWindow):
         widget.insertWidget(0, connectionUI)
 
     def create_room(self):
-        groupCount = chatroomDict.len()
+        global chatroomDict
+        groupCount = str(len(chatroomDict))
         groupName = "Group" + groupCount + " by " + ownNickname
-        chatroomDict[groupName] = [ownNickname]
+        chatroomDict[groupName] = []
+        chatroomDict[groupName].append(ownNickname)
+        print("Create room")
+        print(chatroomDict)
+        groupMessages[groupName] = ''
         data_to_send = ["NewGroup", groupName, " ", datetime.datetime.now().strftime('%H:%M')]
         send_message(data_to_send)
+        self.new_group()
     
     def onetoone(self):
         if self.connectedclient_list.currentRow() != -1:
@@ -235,12 +250,18 @@ class ConnectedUI(QMainWindow):
         if self.chatroom_list.currentRow() != -1:
             global currentGroup
             currentGroup = self.chatroom_list.currentItem().text()
-            if currentGroup not in groupMessages:
+            print("Join room")
+            print(currentGroup)
+            print(chatroomDict)
+            print(chatroomDict[currentGroup])
+            if ownNickname not in chatroomDict[currentGroup]:
+                chatroomDict[currentGroup].append(ownNickname)
                 data_to_send = ["GroupJoin", currentGroup, " ", datetime.datetime.now().strftime('%H:%M')]
                 send_message(data_to_send)
-                groupMessages[currentGroup] = ''
             widget.removeWidget(connectedUI)
             widget.insertWidget(0, groupChatUI)
+            wait()
+            groupChatUI.initialise()
 
     def new_client(self):
         self.connectedclient_list.clear()
@@ -313,15 +334,19 @@ class GroupChatUI(QMainWindow):
         self.groupchat_send_button = self.findChild(QPushButton, "groupchat_send_button")
         self.groupchat_invite_button = self.findChild(QPushButton, "groupchat_invite_button")
         self.groupchat_close_button = self.findChild(QPushButton, "groupchat_close_button")
-
+        self.groupchat_refresh_message = self.findChild(QPushButton, "groupchat_refresh_message")
+        self.groupchat_refresh_members = self.findChild(QPushButton, "groupchat_refresh_members")
 
         # Attach functions to buttons when clicked
         self.groupchat_close_button.clicked.connect(self.close_button)
         self.groupchat_send_button.clicked.connect(self.send_button)
         self.groupchat_invite_button.clicked.connect(self.invite_button)
+        self.groupchat_refresh_message.clicked.connect(self.new_messages)
+        self.groupchat_refresh_members.clicked.connect(self.new_members)
+
 
     def initialise(self):
-        self.groupchat_chatwith_label = currentGroup
+        self.groupchat_label.setText(currentGroup)
         self.groupchat_textbrowser.setText(groupMessages[currentGroup])
         self.groupchat_members_list.clear()
         self.groupchat_members_list.addItems(chatroomDict[currentGroup])
@@ -330,10 +355,10 @@ class GroupChatUI(QMainWindow):
     #Specify function of buttons
     def close_button(self):
         widget.removeWidget(groupChatUI)
-        widget.insertWidget(0, connectionUI)
+        widget.insertWidget(0, connectedUI)
 
     def send_button(self):
-        if self.groupchat_textfield.text().isBlank() == False:
+        if self.groupchat_textfield.text() != "" or re.search("^\s*$", self.groupchat_textfield.text()) == False:
             current_time = datetime.datetime.now().strftime('%H:%M')
             data_to_send = ["GroupMessage", currentGroup, self.groupchat_textfield.text(), current_time]
             send_message(data_to_send)
@@ -344,12 +369,25 @@ class GroupChatUI(QMainWindow):
     def invite_button(self):
         widget.removeWidget(groupChatUI)
         widget.insertWidget(0, inviteUI)
+        inviteUI.initialise()
+
+    def new_messages(self):
+        global groupMessages
+        self.groupchat_textbrowser.setText(groupMessages[currentGroup])
+    
+    def new_members(self):
+        global chatroomDict
+        print("New members")
+        print(chatroomDict)
+        self.groupchat_members_list.clear()
+        self.groupchat_members_list.addItems(chatroomDict[currentGroup])
+        self.groupchat_members_list.repaint()
+
 
 class InviteUI(QMainWindow):
 
     def __init__(self):
         super(InviteUI, self).__init__()
-
         # Load the Connection.ui file
         uic.loadUi("./Windows/Invite.ui", self)
 
@@ -365,9 +403,10 @@ class InviteUI(QMainWindow):
 
     def initialise(self):
         members = [x for x in connectedClientsList if x not in chatroomDict[currentGroup]]
-        self.groupchat_members_list.clear()
+        print(members)
+        self.invite_list.clear()
         self.invite_list.addItems(members)
-        self.groupchat_members_list.repaint()
+        self.invite_list.repaint()
 
     #Specify function of buttons
     def cancel_button(self):
@@ -380,6 +419,7 @@ class InviteUI(QMainWindow):
             data_to_send = ["GroupInvite", currentGroup, self.invite_list.currentItem().text(), current_time]
             send_message(data_to_send)
             chatroomDict[currentGroup] = chatroomDict[currentGroup].append(self.invite_list.currentItem().text())
+            groupMessages[currentGroup] = groupMessages[currentGroup] + "Server ("  + current_time + "): " + self.invite_list.currentItem().text() + " has connected!\n"
             self.initialise()
 
 # Initialise the app and the various scenes. Uses a stacked widget to enable switching between scenes by replacing the current widget with the new widget when 
