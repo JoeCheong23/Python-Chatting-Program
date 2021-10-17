@@ -25,10 +25,11 @@ def wait():
 
 # Method to establish a connection with the server and identify yourself by your nickname. Nickname should be unique.
 def establish_connection(port, nickname):
+    print(nickname)
     global sock
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((host, port))
-    sock.sendall(nickname.encode('utf-8'))
+    sock.sendall(nickname.translate(rot13).encode('utf-8'))
     # Establish socket connection
     recv_thread = threading.Thread(target=receive_data, args=(sock,))
     recv_thread.setDaemon(True)
@@ -41,7 +42,7 @@ def send_message(message):
     for i in message:
         message_string = message_string + i + '|||'
     try:
-        sock.sendall(message_string.encode('utf-8'))
+        sock.sendall(message_string.translate(rot13).encode('utf-8'))
     except socket.error as e:
         print(f"Socket error: {str(e)}")
     except Exception as e:
@@ -51,38 +52,30 @@ def send_message(message):
 # Format for message to be received is [typeOfMessage, sender client/group, sender nickname, message, time]
 # typeOfMessage can be InviteToGroup, Group, OnetoOne, NewGroup, NewClient, AddGroupMember, Disconnect
 def receive_message(message):
-    print("Message receieved from server")
-    messageList = message.decode('utf-8').split('|||')
-    print("Message is " + ','.join([str(element) for element in messageList]))
+    messageList = message.decode('utf-8').translate(rot13).split('|||')
 
     if messageList[0] == "NewGroup" :
         chatroomDict[messageList[1]] = messageList[2].split(',')
         groupMessages[messageList[1]] = ""
         repaint_UI("NewGroup", "")
     elif messageList[0] == "InviteToGroup":
-        chatroomDict[messageList[1]].append(ownNickname)
+        chatroomDict[messageList[1]] = messageList[2].split(";")
     elif messageList[0] == "ClientSetup":
         global connectedClientsList
         connectedClientsList = messageList[3].split(";")
         for x in connectedClientsList:
             oneToOneMessages[x] = ''
-        print("Client setup")
-        print(connectedClientsList)
         repaint_UI("NewClient", "")
     elif messageList[0] == "GroupSetup":
         groupSplit = messageList[3].split(";")
         for x in groupSplit[:-1]:
             roomName = x.split("=")[0]
-            print(roomName)
             roomMembers = x.split("=")[1].split(",")
-            print(roomMembers)
             chatroomDict[roomName] = roomMembers
             groupMessages[roomName] = ''
         repaint_UI("NewGroup", "")
     elif messageList[0] == "NewClient":
         connectedClientsList.append(messageList[2])
-        print(messageList[2])
-        print(connectedClientsList)
         oneToOneMessages[messageList[2]] = ""
         repaint_UI("NewClient", "")
     elif messageList[0] == "Group":
@@ -116,7 +109,6 @@ def receive_data(sock, ):
     try:
         while True:
             data = sock.recv(data_payload)
-            print("Time to receive")
             receive_message(data)
     except socket.error as e:
         print(f"Socket error: {str(e)}")
@@ -230,8 +222,6 @@ class ConnectedUI(QMainWindow):
         groupName = "Group" + groupCount + " by " + ownNickname
         chatroomDict[groupName] = []
         chatroomDict[groupName].append(ownNickname)
-        print("Create room")
-        print(chatroomDict)
         groupMessages[groupName] = ''
         data_to_send = ["NewGroup", groupName, " ", datetime.datetime.now().strftime('%H:%M')]
         send_message(data_to_send)
@@ -250,10 +240,6 @@ class ConnectedUI(QMainWindow):
         if self.chatroom_list.currentRow() != -1:
             global currentGroup
             currentGroup = self.chatroom_list.currentItem().text()
-            print("Join room")
-            print(currentGroup)
-            print(chatroomDict)
-            print(chatroomDict[currentGroup])
             if ownNickname not in chatroomDict[currentGroup]:
                 chatroomDict[currentGroup].append(ownNickname)
                 data_to_send = ["GroupJoin", currentGroup, " ", datetime.datetime.now().strftime('%H:%M')]
@@ -296,7 +282,6 @@ class OneToOneUI(QMainWindow):
         
 
     def initialise(self):
-        print(currentOneToOneClientPartner)
         self.onetoone_chatwith_label.setText('Chat with ' + currentOneToOneClientPartner)
         self.onetoone_textbrowser.setText(oneToOneMessages[currentOneToOneClientPartner])
 
@@ -315,7 +300,6 @@ class OneToOneUI(QMainWindow):
         self.onetoone_textfield.setText('')
 
     def new_message(self):
-        print("refresh pressed")
         self.onetoone_textbrowser.setText(oneToOneMessages[currentOneToOneClientPartner])
             
 class GroupChatUI(QMainWindow):
@@ -377,8 +361,6 @@ class GroupChatUI(QMainWindow):
     
     def new_members(self):
         global chatroomDict
-        print("New members")
-        print(chatroomDict)
         self.groupchat_members_list.clear()
         self.groupchat_members_list.addItems(chatroomDict[currentGroup])
         self.groupchat_members_list.repaint()
@@ -403,7 +385,6 @@ class InviteUI(QMainWindow):
 
     def initialise(self):
         members = [x for x in connectedClientsList if x not in chatroomDict[currentGroup]]
-        print(members)
         self.invite_list.clear()
         self.invite_list.addItems(members)
         self.invite_list.repaint()
@@ -412,13 +393,14 @@ class InviteUI(QMainWindow):
     def cancel_button(self):
         widget.removeWidget(inviteUI)
         widget.insertWidget(0, groupChatUI)
+        groupChatUI.initialise()
 
     def invite_button(self):
         if self.invite_list.currentRow() != -1:
             current_time = datetime.datetime.now().strftime('%H:%M')
             data_to_send = ["GroupInvite", currentGroup, self.invite_list.currentItem().text(), current_time]
             send_message(data_to_send)
-            chatroomDict[currentGroup] = chatroomDict[currentGroup].append(self.invite_list.currentItem().text())
+            chatroomDict[currentGroup].append(self.invite_list.currentItem().text())
             groupMessages[currentGroup] = groupMessages[currentGroup] + "Server ("  + current_time + "): " + self.invite_list.currentItem().text() + " has connected!\n"
             self.initialise()
 

@@ -41,6 +41,11 @@
       <height>181</height>
      </rect>
     </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
    </widget>
    <widget class="QListWidget" name="chatroom_list">
     <property name="geometry">
@@ -50,6 +55,11 @@
       <width>341</width>
       <height>221</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
     </property>
    </widget>
    <widget class="QLabel" name="Chatroom_label2">

@@ -41,6 +41,12 @@
       <height>251</height>
      </rect>
     </property>
+    <property name="font">
+     <font>
+      <family>Segoe UI</family>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
    </widget>
    <widget class="QLineEdit" name="onetoone_textfield">
     <property name="geometry">
@@ -50,6 +56,12 @@
       <width>521</width>
       <height>41</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Segoe UI</family>
+      <pointsize>10</pointsize>
+     </font>
     </property>
    </widget>
    <widget class="QPushButton" name="onetoone_send_button">

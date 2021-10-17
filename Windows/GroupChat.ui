@@ -41,6 +41,11 @@
       <height>251</height>
      </rect>
     </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
    </widget>
    <widget class="QLabel" name="groupchat_members_label">
     <property name="geometry">
@@ -68,6 +73,12 @@
       <width>551</width>
       <height>41</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <family>Segoe UI</family>
+      <pointsize>10</pointsize>
+     </font>
     </property>
    </widget>
    <widget class="QPushButton" name="groupchat_send_button">
@@ -126,6 +137,11 @@
       <width>191</width>
       <height>411</height>
      </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
     </property>
    </widget>
    <widget class="QPushButton" name="groupchat_refresh_message">

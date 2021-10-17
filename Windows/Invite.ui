@@ -26,6 +26,11 @@
       <height>361</height>
      </rect>
     </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+     </font>
+    </property>
    </widget>
    <widget class="QLabel" name="connectedclients_invite_label">
     <property name="geometry">
