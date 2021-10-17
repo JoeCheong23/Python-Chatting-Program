@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QLineEdit, QLabel, QPushButton, QListWidget, QStackedWidget, QTextBrowser
-from PyQt5 import uic
-import sys, socket, threading, datetime, re
+from PyQt5 import uic, QtCore
+import sys, socket, threading, datetime, re, time
 
+port = 6942
 rot13 = str.maketrans(
     'ABCDEFGHIJKLMabcdefghijklmNOPQRSTUVWXYZnopqrstuvwxyz',
     'NOPQRSTUVWXYZnopqrstuvwxyzABCDEFGHIJKLMabcdefghijklm')
@@ -14,15 +15,20 @@ groupMessages = {} # key is group name, value is string containing all messages 
 oneToOneMessages = {} # key is client name, value is string containing all messages separated by new line
 currentOneToOneClientPartner = ''
 currentGroup = ''
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock = None
 
 # Consider saving time separately for messages so different layout can be used. Long string is very rigid.
 
 
 # Method to establish a connection with the server and identify yourself by your nickname. Nickname should be unique.
 def establish_connection(port, nickname):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((host, port))
     sock.sendall(nickname.encode('utf-8'))
+    # Establish socket connection
+    recv_thread = threading.Thread(target=receive_data, args=(sock,))
+    recv_thread.setDaemon(True)
+    recv_thread.start()
 
 # Format for message to be sent is [typeOfMessage, destination client/group, message, time]
 # typeOfMessage can be GroupInvite, GroupJoin, OneToOneMessage, GroupMessage, Disconnect, NewGroup
@@ -40,23 +46,46 @@ def send_message(message):
 
 # Format for message to be received is [typeOfMessage, sender client/group, sender nickname, message, time]
 # typeOfMessage can be InviteToGroup, Group, OnetoOne, NewGroup, NewClient, AddGroupMember, Disconnect
-def receive_message(message, connection_ui, connected_ui):
+def receive_message(message):
+    print("Message receieved from server")
     messageList = message.decode('utf-8').split('|||')
+    print("Message is " + ','.join([str(element) for element in messageList]))
 
     if messageList[0] == "NewGroup" or messageList[0] == "InviteToGroup":
         chatroomDict[messageList[1]] = messageList[2].split(',')
         groupMessages[messageList[1]] = ""
+        repaint_UI("NewGroup", "")
+    elif messageList[0] == "ClientSetup":
+        global connectedClientsList
+        connectedClientsList = messageList[3].split(";")
+        time.sleep(1)
+        print("Client setup")
+        print(connectedClientsList)
+        repaint_UI("NewClient", "")
+    elif messageList[0] == "GroupSetup":
+        groupSplit = messageList[3].split(";")
+        for x in groupSplit:
+            roomName = x.split("=")[0]
+            roomMembers = x.split("=")[1].split(",")
+            chatroomDict[roomName] = roomMembers
+        time.sleep(1)
+        repaint_UI("NewGroup", "")
     elif messageList[0] == "NewClient":
         connectedClientsList.append(messageList[2])
+        print(messageList[2])
+        print(connectedClientsList)
         oneToOneMessages[messageList[2]] = ""
-        connected_ui.new_client()
+        repaint_UI("NewClient", "")
     elif messageList[0] == "Group":
         groupMessages[messageList[1]] = groupMessages[messageList[1]] + messageList[2] + " ("  + messageList[4] + "): " + messageList[3] + "\n"
+        repaint_UI("Group", messageList[1])
     elif messageList[0] == "OnetoOne":
         oneToOneMessages[messageList[2]] = oneToOneMessages[messageList[2]] + messageList[2] + " ("  + messageList[4] + "): " + messageList[3] + "\n"
+        repaint_UI("OnetoOne", messageList[2])
     elif messageList[0] == "AddGroupMember":
         chatroomDict[messageList[1]] = chatroomDict[messageList[1]].append(messageList[2])
         groupMessages[messageList[1]] = groupMessages[messageList[1]] + "Server ("  + messageList[4] + "): " + messageList[2] + " has connected!\n"
+        repaint_UI("AddGroupMember", messageList[1])
     elif messageList[0] == "Disconnect":
         disconnectedMember = messageList[2]
         connectedClientsList.remove(disconnectedMember)
@@ -65,25 +94,43 @@ def receive_message(message, connection_ui, connected_ui):
                 chatroomDict[roomKey].remove(disconnectedMember)
                 groupMessages[roomKey] = groupMessages[roomKey] + "Server ("  + messageList[4] + "): " + messageList[2] + " has disconnected!\n"
         oneToOneMessages[disconnectedMember] = oneToOneMessages[disconnectedMember] + "Server ("  + messageList[4] + "): " + messageList[2] + " has disconnected!\n"
+        repaint_UI("NewClient", "")
+    
     
 
 # Function to receive data that should be run in a separate thread to prevent blocking
-def receive_data(sock, connection_ui, connected_ui):
+def receive_data(sock, ):
     try:
         while True:
             data = sock.recv(data_payload)
-            receive_message(data, connection_ui, connected_ui)
+            print("Time to receive")
+            receive_message(data)
     except socket.error as e:
         print(f"Socket error: {str(e)}")
-    except Exception as e:
-        print(f"Other exception: {str(e)}")
+    # except Exception as e:
+    #     print(f"Other exception: {str(e)}")
     finally:
         print("Closing connection to the server")
         sock.close()
 
-
-
-
+def repaint_UI(repaint_option, chat_target):
+ 
+    if repaint_option == "NewClient":
+        connectedUI.new_client()
+    elif repaint_option == "NewGroup":
+        connectedUI.new_group()
+    elif repaint_option == "GroupMessage":
+        if (chat_target == currentGroup):
+            groupChatUI.groupchat_textbrowser.setText(groupMessages[currentGroup])
+    elif repaint_option == "AddGroupMember":
+        if (chat_target == currentGroup):
+            groupChatUI.groupchat_members_list.clear()
+            groupChatUI.groupchat_members_list.addItems(chatroomDict[currentGroup])
+            groupChatUI.groupchat_members_list.repaint()
+    elif repaint_option == "OnetoOne":
+        if (chat_target == currentOneToOneClientPartner):
+            onetooneUI.onetoone_textbrowser.setText(oneToOneMessages[currentOneToOneClientPartner])
+    
 
 class ConnectionUI(QWidget):
     def __init__(self):
@@ -113,7 +160,8 @@ class ConnectionUI(QWidget):
     # Specify functions of buttons
     def connect(self):
         ownNickname=self.nickname_textfield.text()
-        connection_thread = threading.Thread(target=establish_connection, args=(int(self.port_textfield.text()), self.nickname_textfield.text()))
+        # connection_thread = threading.Thread(target=establish_connection, args=(int(self.port_textfield.text()), self.nickname_textfield.text()))
+        connection_thread = threading.Thread(target=establish_connection, args=(port, self.nickname_textfield.text()))
         connection_thread.setDaemon(True)
         connection_thread.start()
         widget.removeWidget(connectionUI)
@@ -148,7 +196,6 @@ class ConnectedUI(QMainWindow):
     #Specify function of buttons
     def close_connected(self):
         data_to_send = ["Disconnect", " ", " ", datetime.datetime.now().strftime('%H:%M')]
-        sock.shutdown()
         sock.close()
         widget.removeWidget(connectedUI)
         widget.insertWidget(0, connectionUI)
@@ -162,12 +209,14 @@ class ConnectedUI(QMainWindow):
     
     def onetoone(self):
         if self.connectedclient_list.currentRow() != -1:
+            global currentOneToOneClientPartner
             currentOneToOneClientPartner = self.connectedclient_list.currentItem().text()
             widget.removeWidget(connectedUI)
             widget.insertWidget(0, onetooneUI)
 
     def join_room(self):
         if self.chatroom_list.currentRow() != -1:
+            global currentGroup
             currentGroup = self.chatroom_list.currentItem().text()
             if currentGroup not in groupMessages:
                 data_to_send = ["GroupJoin", currentGroup, " ", datetime.datetime.now().strftime('%H:%M')]
@@ -186,8 +235,7 @@ class ConnectedUI(QMainWindow):
 
     def new_group(self):
         self.chatroom_list.clear()
-        for group in chatroomDict:
-            self.chatroom_list.addItem((group + " by " + chatroomDict[group][0]))
+        self.chatroom_list.addItems(list(chatroomDict.keys()))
         self.chatroom_list.repaint()
 
 class OneToOneUI(QMainWindow):
@@ -330,7 +378,4 @@ if __name__ == '__main__':
     widget.show()
     app.exec_()
 
-    # Establish socket connection
-    recv_thread = threading.Thread(target=receive_data, args=(sock, connectionUI, connectedUI))
-    recv_thread.setDaemon(True)
-    recv_thread.start()
+    

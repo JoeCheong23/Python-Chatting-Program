@@ -36,12 +36,28 @@ def chat_server(port):
         newclient_thread = threading.Thread(target=new_clients, args=(sock, client))
         newclient_thread.setDaemon(True)
         newclient_thread.start()
+        setupclient_thread = threading.Thread(target=setup_client, args=(client, ))
+        setupclient_thread.setDaemon(True)
+        setupclient_thread.start()
 
+
+def setup_client(client):
+    if len(clientDict) > 0:
+        data = ["ClientSetup", " ", " ", ";".join([str(element) for element in list(clientDict.keys())]), datetime.datetime.now().strftime('%H:%M')]
+        client.sendall(data_to_serial(data).encode('utf-8'))
+        if len(roomDict) > 0:
+            roomString = ''
+            for key in roomDict.keys():
+                roomString = roomString + str(key) + "="
+                roomString = roomString + ",".join([str(element) for element in roomDict[key]])
+                roomString = roomString + ";"
+            data = ["GroupSetup", " ", " ", roomString, datetime.datetime.now().strftime('%H:%M')]
+            client.sendall(data_to_serial(data).encode('utf-8'))
 
 def new_clients(sock, client):
     uname = client.recv(data_payload).decode()
     if uname:
-        print(uname + " joined. Current clients are " + clientDict.keys())
+        print(uname + " joined. Current clients are " + ','.join([str(element) for element in list(clientDict.keys())]))
         clientDict[uname] = client
         notify_thread = threading.Thread(target=notify_all, args=(uname, None, "NewClient", None))
         notify_thread.setDaemon(True)
@@ -53,7 +69,10 @@ def new_clients(sock, client):
 
 def receive_data(sock, client, uname):
     while True:
-        data = client.recv(data_payload)
+        try:
+            data = client.recv(data_payload)
+        except socket.error as e:
+            print(f"Socket error: {str(e)}")
         if data:
             messageList = data.decode().split('|||')
             if messageList:
@@ -84,7 +103,6 @@ def message_actions(uname, messageList):
         notify_thread.setDaemon(True)
         notify_thread.start()
     elif messageList[0] == "Disconnect":
-        clientDict[uname].shutdown()
         clientDict[uname].close()
         clientDict.pop(uname, None)
         notify_thread = threading.Thread(target=notify_all, args=(uname, messageList[1], "Disconnect", messageList[2]))    
@@ -114,37 +132,45 @@ def notify_all(uname, recipient, messageType, message):
         data = ["AddGroupMember", recipient, message, " ", datetime.datetime.now().strftime('%H:%M')]
         for member in roomDict[recipient]:
             if member != uname and member != message:
+                print("Sending to "+ member + " " + ','.join([str(element) for element in data]))
                 clientDict[member].sendall(data_to_serial(data).encode('utf-8'))
             elif member == message:
                 data = ["InviteToGroup", recipient, message, " ", datetime.datetime.now().strftime('%H:%M')]
+                print("Sending to "+ member + " " + ','.join([str(element) for element in data]))
                 clientDict[member].sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "GroupJoin":
-        data = ["AddGroupMember", recipient, uname, " ", datetime.datetime.now().strftime('%H:%M')]
+        data = ["AddGroupMember", recipient, uname, ",", datetime.datetime.now().strftime('%H:%M')]
         for member in roomDict[recipient]:
             if member != uname:
+                print("Sending to "+ member + " " + ','.join([str(element) for element in data]))
                 clientDict[member].sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "OneToOneMessage" and recipient in clientDict:
         data = ["OnetoOne", " ", uname, message, datetime.datetime.now().strftime('%H:%M')]
+        print("Sending to "+ recipient + " " + ','.join([str(element) for element in data]))
         clientDict[recipient].sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "GroupMessage" and recipient in roomDict:
         data = ["Group", recipient, uname, message, datetime.datetime.now().strftime('%H:%M')]
         for member in roomDict[recipient]:
             if member != uname:
+                print("Sending to " + member + " " + ','.join([str(element) for element in data]))
                 clientDict[member].sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "Disconnect":
         data = ["Disconnect", " ", uname, message, datetime.datetime.now().strftime('%H:%M')]
         for client in clientDict.values():
+            print("Sending to "+ client + " " + ','.join([str(element) for element in data]))
             client.sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "NewGroup":
         data = ["NewGroup", recipient, uname, message, datetime.datetime.now().strftime('%H:%M')]
         for client in clientDict.values():
-            if client != uname:
+            if client != clientDict[uname]:
+                print("Sending to "+ uname + " " + ','.join([str(element) for element in data]))
                 client.sendall(data_to_serial(data).encode('utf-8'))
     elif messageType == "NewClient":
         data = ["NewClient", " ", uname, " ", datetime.datetime.now().strftime('%H:%M')]
-        for client in clientDict.values():
+        for client in clientDict.keys():
             if client != uname:
-                client.sendall(data_to_serial(data).encode('utf-8'))
+                print("Sending to "+ client + " " + ','.join([str(element) for element in data]))
+                clientDict[client].sendall(data_to_serial(data).encode('utf-8'))
 
 def data_to_serial(data):
     serial = ''
