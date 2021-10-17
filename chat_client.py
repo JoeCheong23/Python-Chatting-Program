@@ -17,11 +17,15 @@ currentOneToOneClientPartner = ''
 currentGroup = ''
 sock = None
 
+
 # Consider saving time separately for messages so different layout can be used. Long string is very rigid.
 
+def wait(): 
+    time.sleep(0.5)
 
 # Method to establish a connection with the server and identify yourself by your nickname. Nickname should be unique.
 def establish_connection(port, nickname):
+    global sock
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((host, port))
     sock.sendall(nickname.encode('utf-8'))
@@ -58,7 +62,8 @@ def receive_message(message):
     elif messageList[0] == "ClientSetup":
         global connectedClientsList
         connectedClientsList = messageList[3].split(";")
-        time.sleep(1)
+        for x in connectedClientsList:
+            oneToOneMessages[x] = ''
         print("Client setup")
         print(connectedClientsList)
         repaint_UI("NewClient", "")
@@ -68,7 +73,6 @@ def receive_message(message):
             roomName = x.split("=")[0]
             roomMembers = x.split("=")[1].split(",")
             chatroomDict[roomName] = roomMembers
-        time.sleep(1)
         repaint_UI("NewGroup", "")
     elif messageList[0] == "NewClient":
         connectedClientsList.append(messageList[2])
@@ -107,8 +111,8 @@ def receive_data(sock, ):
             receive_message(data)
     except socket.error as e:
         print(f"Socket error: {str(e)}")
-    # except Exception as e:
-    #     print(f"Other exception: {str(e)}")
+    except Exception as e:
+        print(f"Other exception: {str(e)}")
     finally:
         print("Closing connection to the server")
         sock.close()
@@ -116,9 +120,9 @@ def receive_data(sock, ):
 def repaint_UI(repaint_option, chat_target):
  
     if repaint_option == "NewClient":
-        connectedUI.new_client()
+        connectedUI.connected_refresh_button.click()
     elif repaint_option == "NewGroup":
-        connectedUI.new_group()
+        connectedUI.connected_refresh_group_button.click()
     elif repaint_option == "GroupMessage":
         if (chat_target == currentGroup):
             groupChatUI.groupchat_textbrowser.setText(groupMessages[currentGroup])
@@ -129,7 +133,7 @@ def repaint_UI(repaint_option, chat_target):
             groupChatUI.groupchat_members_list.repaint()
     elif repaint_option == "OnetoOne":
         if (chat_target == currentOneToOneClientPartner):
-            onetooneUI.onetoone_textbrowser.setText(oneToOneMessages[currentOneToOneClientPartner])
+            onetooneUI.onetoone_refresh_button.click()
     
 
 class ConnectionUI(QWidget):
@@ -159,6 +163,7 @@ class ConnectionUI(QWidget):
 
     # Specify functions of buttons
     def connect(self):
+        global ownNickname
         ownNickname=self.nickname_textfield.text()
         # connection_thread = threading.Thread(target=establish_connection, args=(int(self.port_textfield.text()), self.nickname_textfield.text()))
         connection_thread = threading.Thread(target=establish_connection, args=(port, self.nickname_textfield.text()))
@@ -166,6 +171,9 @@ class ConnectionUI(QWidget):
         connection_thread.start()
         widget.removeWidget(connectionUI)
         widget.insertWidget(0, connectedUI)
+        wait()
+        connectedUI.initialise()
+
         
 
 class ConnectedUI(QMainWindow):
@@ -180,18 +188,25 @@ class ConnectedUI(QMainWindow):
         self.Chatroom = self.findChild(QLabel, "Chatroom")
         self.connectedclient_list = self.findChild(QListWidget, "connectedclient_list")
         self.Chatroom_label2 = self.findChild(QLabel, "Chatroom_label2")
+        self.welcome_label = self.findChild(QLabel, "welcome_label")
         self.chatroom_list = self.findChild(QListWidget, "chatroom_list")
         self.onetoone_button = self.findChild(QPushButton, "onetoone_button")
         self.createroom_button = self.findChild(QPushButton, "createroom_button")
         self.joinroom_button = self.findChild(QPushButton, "joinroom_button")
         self.closeconnected_button = self.findChild(QPushButton, "closeconnected_button")
+        self.connected_refresh_button = self.findChild(QPushButton, "connected_refresh_button")
+        self.connected_refresh_group_button = self.findChild(QPushButton, "connected_refresh_group_button")
+
 
         # Attach functions to buttons when clicked
         self.closeconnected_button.clicked.connect(self.close_connected)
         self.createroom_button.clicked.connect(self.create_room)
         self.onetoone_button.clicked.connect(self.onetoone)
-        # self.connectedclient_list.itemActivated.connect(self.item_activated)
+        self.connected_refresh_button.clicked.connect(self.new_client)
+        self.connected_refresh_group_button.clicked.connect(self.new_group)
 
+    def initialise(self):
+        self.welcome_label.setText("Welcome " + ownNickname + "!")
 
     #Specify function of buttons
     def close_connected(self):
@@ -213,6 +228,8 @@ class ConnectedUI(QMainWindow):
             currentOneToOneClientPartner = self.connectedclient_list.currentItem().text()
             widget.removeWidget(connectedUI)
             widget.insertWidget(0, onetooneUI)
+            wait()
+            onetooneUI.initialise()
 
     def join_room(self):
         if self.chatroom_list.currentRow() != -1:
@@ -224,9 +241,6 @@ class ConnectedUI(QMainWindow):
                 groupMessages[currentGroup] = ''
             widget.removeWidget(connectedUI)
             widget.insertWidget(0, groupChatUI)
-
-    # def item_activated(self):
-    #     print("Selected client: ", self.connectedclient_list.currentItem().text())
 
     def new_client(self):
         self.connectedclient_list.clear()
@@ -252,10 +266,13 @@ class OneToOneUI(QMainWindow):
         self.onetoone_textfield = self.findChild(QLineEdit, "onetoone_textfield")
         self.onetoone_send_button = self.findChild(QPushButton, "onetoone_send_button")
         self.onetoone_close_button = self.findChild(QPushButton, "onetoone_close_button")
+        self.onetoone_refresh_button = self.findChild(QPushButton, "onetoone_refresh_button")
 
         # Attach functions to buttons when clicked
         self.onetoone_close_button.clicked.connect(self.close_button)
+        self.onetoone_refresh_button.clicked.connect(self.new_message)
         self.onetoone_send_button.clicked.connect(self.send_button)
+        
 
     def initialise(self):
         print(currentOneToOneClientPartner)
@@ -268,13 +285,17 @@ class OneToOneUI(QMainWindow):
         widget.insertWidget(0, connectedUI)
 
     def send_button(self):
-        if self.onetoone_textfield.text() != "" or re.search("^\s*$", self.onetoone_textfield.text()):
+        if self.onetoone_textfield.text() != "" or re.search("^\s*$", self.onetoone_textfield.text()) == False:
             current_time = datetime.datetime.now().strftime('%H:%M')
             data_to_send = ["OneToOneMessage", currentOneToOneClientPartner, self.onetoone_textfield.text(), current_time]
             send_message(data_to_send)
             oneToOneMessages[currentOneToOneClientPartner] = oneToOneMessages[currentOneToOneClientPartner] + ownNickname + " ("  + current_time + "): " + self.onetoone_textfield.text() + "\n"
             self.onetoone_textbrowser.setText(oneToOneMessages[currentOneToOneClientPartner])
         self.onetoone_textfield.setText('')
+
+    def new_message(self):
+        print("refresh pressed")
+        self.onetoone_textbrowser.setText(oneToOneMessages[currentOneToOneClientPartner])
             
 class GroupChatUI(QMainWindow):
 

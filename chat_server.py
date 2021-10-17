@@ -69,10 +69,17 @@ def new_clients(sock, client):
 
 def receive_data(sock, client, uname):
     while True:
+        data = ''
         try:
             data = client.recv(data_payload)
         except socket.error as e:
             print(f"Socket error: {str(e)}")
+            client.close()
+            message = ["Disconnect", " ", " ", " "] 
+            disconnect_thread = threading.Thread(target=message_actions, args=(uname, messageList))
+            disconnect_thread.setDaemon(True)
+            disconnect_thread.start()
+            break
         if data:
             messageList = data.decode().split('|||')
             if messageList:
