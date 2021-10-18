@@ -165,7 +165,7 @@ class ConnectionUI(QWidget):
     def connect(self):
         global ownNickname
         ownNickname=self.nickname_textfield.text()
-        # connection_thread = threading.Thread(target=establish_connection, args=(int(self.port_textfield.text()), self.nickname_textfield.text()))
+        port = int(self.port_textfield.text())
         connection_thread = threading.Thread(target=establish_connection, args=(port, self.nickname_textfield.text()))
         connection_thread.setDaemon(True)
         connection_thread.start()
