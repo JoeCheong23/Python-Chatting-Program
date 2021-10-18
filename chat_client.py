@@ -20,8 +20,10 @@ sock = None
 
 # Consider saving time separately for messages so different layout can be used. Long string is very rigid.
 
+# Method to wait to prevent two threads trying to access the same lock.
 def wait(): 
     time.sleep(0.5)
+
 
 # Method to establish a connection with the server and identify yourself by your nickname. Nickname should be unique.
 def establish_connection(port, nickname):
@@ -35,6 +37,7 @@ def establish_connection(port, nickname):
     recv_thread.setDaemon(True)
     recv_thread.start()
 
+# Method that sends message to the server after encrypting and encoding it.
 # Format for message to be sent is [typeOfMessage, destination client/group, message, time]
 # typeOfMessage can be GroupInvite, GroupJoin, OneToOneMessage, GroupMessage, Disconnect, NewGroup
 def send_message(message):
@@ -49,6 +52,7 @@ def send_message(message):
         print(f"Other exception: {str(e)}")
 
 
+# Method that decrypts, decodes, and stores the information based on the message received.
 # Format for message to be received is [typeOfMessage, sender client/group, sender nickname, message, time]
 # typeOfMessage can be InviteToGroup, Group, OnetoOne, NewGroup, NewClient, AddGroupMember, Disconnect
 def receive_message(message):
@@ -102,7 +106,6 @@ def receive_message(message):
         if currentGroup != '':
             repaint_UI("AddGroupMember", currentGroup)
     
-    
 
 # Function to receive data that should be run in a separate thread to prevent blocking
 def receive_data(sock, ):
@@ -118,6 +121,8 @@ def receive_data(sock, ):
         print("Closing connection to the server")
         sock.close()
 
+
+# Method to refresh UI based on the specific view that has been updated.
 def repaint_UI(repaint_option, chat_target):
  
     if repaint_option == "NewClient":
