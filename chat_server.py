@@ -1,4 +1,4 @@
-import socket, sys, argparse, threading, datetime
+import socket, argparse, threading, datetime
 
 host = 'localhost'
 data_payload = 2048
@@ -41,6 +41,9 @@ def chat_server(port):
         setupclient_thread.start()
 
 
+# Method that sends necessary information to the client in order to set them up. This includes
+# notifying the user of the current list of clients available to communicate with and the group chats
+# available to join, and their current group members.
 def setup_client(client):
     if len(clientDict) > 0:
         data = ["ClientSetup", " ", " ", ";".join([str(element) for element in list(clientDict.keys())]), datetime.datetime.now().strftime('%H:%M')]
@@ -54,6 +57,9 @@ def setup_client(client):
             data = ["GroupSetup", " ", " ", roomString, datetime.datetime.now().strftime('%H:%M')]
             client.sendall(data_to_serial(data).encode('utf-8'))
 
+
+# Method that stores information about a new client and calls methods to notify the rest of the clients 
+# that a new client is available to communicate with
 def new_clients(sock, client):
     uname = client.recv(data_payload).decode().translate(rot13)
     if uname:
@@ -67,6 +73,8 @@ def new_clients(sock, client):
         recv_thread.start()
 
 
+# Method that receives information from the client, performs decoding and decryption before calling 
+# methods to deal with the message and its contents.
 def receive_data(sock, client, uname):
     while True:
         data = ''
@@ -88,6 +96,8 @@ def receive_data(sock, client, uname):
                 message_thread.start() 
           
 
+# Method that perfroms actions depending on the type of message received. Calls the notify_all method to 
+# notify all relevant clients of changes.
 def message_actions(uname, messageList):
     if messageList[0] == "GroupInvite":
         if messageList[2] in clientDict and messageList[1] in roomDict:
@@ -124,7 +134,7 @@ def message_actions(uname, messageList):
         notify_thread.start()
 
 
-
+# Method that notifies all relevant clients about updates based on the message arguments.
 def notify_all(uname, recipient, messageType, message):
 
     # GroupInvite
@@ -170,12 +180,16 @@ def notify_all(uname, recipient, messageType, message):
             if client != uname:
                 clientDict[client].sendall(data_to_serial(data).encode('utf-8'))
 
+
+# Converts data from an array of string to a string, and performs encryption with ROT13
 def data_to_serial(data):
     serial = ''
     for string in data:
         serial = serial + string + '|||'
     return serial.translate(rot13)
 
+
+# Main function
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Socket Server Example')
     parser.add_argument('--port', action="store",
